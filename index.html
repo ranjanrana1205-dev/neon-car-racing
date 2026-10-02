@@ -1,0 +1,163 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neon Rush Racing</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#080b18;color:white;font-family:Arial,sans-serif;text-align:center}
+h1{color:#38f5ff;text-shadow:0 0 18px #38f5ff;margin:24px 0 6px}
+p{color:#aab4d1}
+.hud{display:flex;justify-content:space-around;max-width:400px;margin:18px auto;font-weight:bold}
+.hud span{color:#ff3bcb}
+#game{height:500px;max-height:65vh;min-height:380px;width:min(360px,94vw);margin:auto;position:relative;overflow:hidden;background:linear-gradient(90deg,#11182b,#242b40,#11182b);border:3px solid #38f5ff;border-radius:12px;box-shadow:0 0 25px #38f5ff55}
+.line{position:absolute;top:-100%;height:300%;width:5px;background:repeating-linear-gradient(to bottom,#aab4d1 0 30px,transparent 30px 60px);animation:road 0.5s linear infinite;animation-play-state:paused}
+#game.running .line{animation-play-state:running}
+.line.one{left:33%}.line.two{left:66%}
+@keyframes road{to{transform:translateY(60px)}}
+.car{position:absolute;width:42px;height:68px;border-radius:10px 10px 6px 6px}
+#player{bottom:25px;left:calc(50% - 21px);background:linear-gradient(90deg,#00a6ba,#38f5ff,#00a6ba);border:2px solid white;box-shadow:0 0 18px #38f5ff;z-index:2}
+.car:before{content:"";position:absolute;left:7px;right:7px;top:12px;height:20px;background:#172238;border:1px solid #b8faff;border-radius:6px}
+#player:after{content:"";position:absolute;bottom:5px;left:7px;right:7px;height:5px;background:white;box-shadow:0 0 8px white}
+.enemy{background:linear-gradient(90deg,#b61b8b,#ff3bcb,#b61b8b);border:2px solid #ffc5f3;box-shadow:0 0 12px #ff3bcb}
+.enemy:after{content:"";position:absolute;bottom:5px;left:7px;right:7px;height:5px;background:#ffca52}
+#overlay{position:absolute;inset:0;background:#080b18dd;display:flex;align-items:center;justify-content:center;z-index:5}
+#overlay.hidden{display:none}
+.panel{padding:24px}
+button{background:#38f5ff;color:#07101a;border:0;padding:14px 22px;border-radius:7px;font-weight:bold;cursor:pointer}
+.controls{margin:14px auto;display:flex;justify-content:center;gap:35px}
+.controls button{font-size:24px;min-width:75px;touch-action:manipulation}
+small{color:#aab4d1}
+</style>
+</head>
+<body>
+<h1>⚡ NEON RUSH</h1>
+<p>Dodge the traffic. Beat your high score!</p>
+<div class="hud">
+  <div>SCORE<br><span id="score">0</span></div>
+  <div>BEST<br><span id="best">0</span></div>
+  <div>SPEED<br><span id="speed">0</span></div>
+</div>
+
+<div id="game">
+  <div class="line one"></div>
+  <div class="line two"></div>
+  <div id="player" class="car"></div>
+  <div id="traffic"></div>
+  <div id="overlay">
+    <div class="panel">
+      <h2 id="title">READY TO RACE?</h2>
+      <p id="message">Use ← → or A / D to steer.</p>
+      <button id="start">START GAME ▶</button>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="left" aria-label="Move left">←</button>
+  <button id="right" aria-label="Move right">→</button>
+</div>
+<small>Made with HTML, CSS & JavaScript</small>
+
+<script>
+const game=document.getElementById('game');
+const player=document.getElementById('player');
+const traffic=document.getElementById('traffic');
+const overlay=document.getElementById('overlay');
+const start=document.getElementById('start');
+const lanes=[17,50,83];
+let lane=1,score=0,best=0,speed=220;
+let enemies=[],running=false,last=0,spawn=0,raf=0;
+
+try{best=Number(localStorage.getItem('neonBest'))||0}catch(e){}
+document.getElementById('best').textContent=best;
+
+function placePlayer(){
+  player.style.left=`calc(${lanes[lane]}% - 21px)`;
+}
+function move(d){
+  if(!running)return;
+  lane=Math.max(0,Math.min(2,lane+d));
+  placePlayer();
+}
+function spawnEnemy(){
+  const l=Math.floor(Math.random()*3);
+  const el=document.createElement('div');
+  el.className='car enemy';
+  el.style.left=`calc(${lanes[l]}% - 21px)`;
+  el.style.top='-80px';
+  traffic.appendChild(el);
+  enemies.push({el,l,y:-80});
+}
+function startGame(){
+  cancelAnimationFrame(raf);
+  enemies.forEach(e=>e.el.remove());
+  enemies=[];
+  lane=1;score=0;speed=220;spawn=0;last=0;
+  running=true;
+  placePlayer();
+  document.getElementById('score').textContent='0';
+  document.getElementById('speed').textContent='0';
+  overlay.classList.add('hidden');
+  game.classList.add('running');
+  raf=requestAnimationFrame(loop);
+}
+function endGame(){
+  running=false;
+  game.classList.remove('running');
+  cancelAnimationFrame(raf);
+  if(score>best){
+    best=score;
+    try{localStorage.setItem('neonBest',best)}catch(e){}
+    document.getElementById('best').textContent=best;
+  }
+  document.getElementById('title').textContent='💥 GAME OVER!';
+  document.getElementById('message').textContent='Your score: '+score;
+  start.textContent='PLAY AGAIN ↻';
+  overlay.classList.remove('hidden');
+}
+function loop(t){
+  if(!running)return;
+  if(!last)last=t;
+  const dt=Math.min((t-last)/1000,.04);
+  last=t;
+  speed=Math.min(220+score*.25,500);
+  score+=Math.floor(dt*10);
+  document.getElementById('score').textContent=score;
+  document.getElementById('speed').textContent=Math.round(speed);
+
+  spawn+=dt;
+  if(spawn>Math.max(.48,1-speed/800)){
+    spawn=0;spawnEnemy();
+  }
+  const pr=player.getBoundingClientRect();
+  for(let i=enemies.length-1;i>=0;i--){
+    const e=enemies[i];
+    e.y+=speed*dt;
+    e.el.style.top=e.y+'px';
+    const r=e.el.getBoundingClientRect();
+    if(pr.left+5<r.right-5&&pr.right-5>r.left+5&&
+       pr.top+5<r.bottom-5&&pr.bottom-5>r.top+5){
+      endGame();return;
+    }
+    if(e.y>game.clientHeight){
+      e.el.remove();enemies.splice(i,1);
+    }
+  }
+  raf=requestAnimationFrame(loop);
+}
+start.addEventListener('click',startGame);
+document.addEventListener('keydown',e=>{
+  if(['ArrowLeft','ArrowRight','a','A','d','D'].includes(e.key))e.preventDefault();
+  if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A')move(-1);
+  if(e.key==='ArrowRight'||e.key==='d'||e.key==='D')move(1);
+  if(!running&&(e.key==='Enter'||e.key===' '))startGame();
+});
+document.getElementById('left').addEventListener('pointerdown',()=>move(-1));
+document.getElementById('right').addEventListener('pointerdown',()=>move(1));
+placePlayer();
+</script>
+</body>
+</html>
